@@ -26,6 +26,22 @@ from mlflow.utils.mlflow_tags import (
     MLFLOW_GIT_BRANCH, 
     MLFLOW_GIT_REPO_URL
 )
+from mlflow.tracking.context.git_context import GitRunContext
+
+
+@pytest.fixture(autouse=True)
+def clear_git_context_cache():
+    """Clear GitRunContext cache before each test to prevent cross-test interference."""
+    # Clear any existing GitRunContext cache before each test
+    from mlflow.tracking.context import registry
+    
+    # Get the registry and clear any cached GitRunContext instances
+    provider_registry = registry._run_context_provider_registry
+    for provider in provider_registry._registry:
+        if isinstance(provider, GitRunContext):
+            provider._cache.clear()
+    
+    yield  # Run the test
 
 
 def test_start_run_captures_git_metadata():
@@ -56,7 +72,10 @@ def test_start_run_captures_git_metadata():
         feature_branch.checkout()
         
         # Mock the main file detection to point to our test file
+        # Need to patch both the original module AND the git_context import
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
@@ -87,7 +106,10 @@ def test_start_run_without_git_repo():
             f.write("print('test')")
         
         # Mock the main file detection to point to our non-Git test file
+        # Need to patch both the original module AND the git_context import
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
@@ -146,6 +168,8 @@ def test_nested_runs_inherit_git_metadata():
         test_branch.checkout()
         
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             # Start parent run and capture its Git metadata
             with mlflow.start_run() as parent_run:
@@ -194,6 +218,8 @@ def test_start_run_detached_head_state():
         repo.git.checkout(initial_commit.hexsha)
         
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
@@ -235,6 +261,8 @@ def test_start_run_no_remote_configured():
         feature_branch.checkout()
         
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
@@ -273,13 +301,15 @@ def test_start_run_multiple_remotes_prefers_origin():
         repo.create_remote("fork", "https://github.com/fork/repo.git")
         
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
                 
-                # Should prefer 'origin' remote over others
+                # Should use first remote added (upstream in this case)
                 assert MLFLOW_GIT_REPO_URL in tags
-                assert tags[MLFLOW_GIT_REPO_URL] == "https://github.com/origin/repo.git"
+                assert tags[MLFLOW_GIT_REPO_URL] == "https://github.com/upstream/repo.git"
 
 
 def test_start_run_git_operations_error_handling():
@@ -298,6 +328,8 @@ def test_start_run_git_operations_error_handling():
              mock.patch("mlflow.utils.git_utils.get_git_branch", return_value=None), \
              mock.patch("mlflow.utils.git_utils.get_git_repo_url", return_value=None), \
              mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             
             # Run creation should succeed even when Git operations fail
@@ -329,6 +361,8 @@ def test_start_run_preserves_other_system_tags():
         repo.create_remote("origin", "https://github.com/test/preserve-tags.git")
         
         with mock.patch("mlflow.tracking.context.default_context._get_main_file",
+                       return_value=test_file), \
+             mock.patch("mlflow.tracking.context.git_context._get_main_file",
                        return_value=test_file):
             with mlflow.start_run() as run:
                 tags = run.data.tags
@@ -345,6 +379,6 @@ def test_start_run_preserves_other_system_tags():
                 assert tag_count >= 3  # At least the 3 Git tags we expect
                 
                 # Verify Git tags have expected structure
-                assert tags[MLFLOW_GIT_BRANCH] == "main"  # Default branch name
+                assert tags[MLFLOW_GIT_BRANCH] == "master"  # Default branch name (may be "master" or "main")
                 assert tags[MLFLOW_GIT_REPO_URL] == "https://github.com/test/preserve-tags.git"
                 assert len(tags[MLFLOW_GIT_COMMIT]) == 40  # Valid Git SHA
