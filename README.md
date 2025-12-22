@@ -13,7 +13,7 @@ MLflow is an open-source platform, purpose-built to assist machine learning prac
 
 The core components of MLflow are:
 
-- [Experiment Tracking](https://mlflow.org/docs/latest/tracking.html) 📝: A set of APIs to log models, params, and results in ML experiments and compare them using an interactive UI.
+- [Experiment Tracking](https://mlflow.org/docs/latest/tracking.html) 📝: A set of APIs to log models, params, and results in ML experiments and compare them using an interactive UI. MLflow also automatically captures Git repository metadata (branch name and repository URL) as system tags when experiments are run from within a Git repository.
 - [Model Packaging](https://mlflow.org/docs/latest/models.html) 📦: A standard format for packaging a model and its metadata, such as dependency versions, ensuring reliable deployment and strong reproducibility.
 - [Model Registry](https://mlflow.org/docs/latest/model-registry.html) 💾: A centralized model store, set of APIs, and UI, to collaboratively manage the full lifecycle of MLflow Models.
 - [Serving](https://mlflow.org/docs/latest/deployment/index.html) 🚀: Tools for seamless model deployment to batch and real-time scoring on platforms like Docker, Kubernetes, Azure ML, and AWS SageMaker.
