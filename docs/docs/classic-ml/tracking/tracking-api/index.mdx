@@ -558,13 +558,27 @@ MLflow automatically sets several system tags to capture execution context:
 | `mlflow.docker.image.name`  | Docker image used                        | Docker environments    |
 | `mlflow.note.content`       | **User-editable** description            | Manual only            |
 
-:::info Automatic Git Metadata Tracking
-When you start an MLflow run from within a Git repository, MLflow automatically captures the current Git commit hash, branch name, and repository URL as system tags. This happens transparently without requiring any code changes, making it easy to trace experiment results back to the exact code version that produced them. These tags are set when Git information is available; if any information cannot be detected (e.g., detached HEAD state), that particular tag is simply omitted.
-:::
-
 :::tip pro-tip
 Use `mlflow.note.content` to document experiment insights, hypotheses, or results directly in the MLflow UI. This tag appears in a dedicated Notes section on the run page.
 :::
+
+### Automatic Git Metadata Tracking
+
+MLflow automatically captures Git metadata when runs are started from within a Git repository, requiring no changes to your existing code.
+
+The following system tags are automatically set when available:
+
+- `mlflow.source.git.commit` - The current Git commit hash
+- `mlflow.source.git.branch` - The current Git branch name
+- `mlflow.source.git.repoURL` - The Git repository URL (typically from the first remote)
+
+These tags are set automatically without requiring any code changes when you call `mlflow.start_run()` or create runs through the tracking client.
+
+:::note
+When Git information is unavailable (such as detached HEAD state or running outside a Git repository), these tags are simply not set and no errors are raised. Your runs will continue to work normally.
+:::
+
+If you manually set any of these Git tags using `mlflow.set_tag()`, your manually set values will take precedence over automatically detected values.
 
 ### Integration with Auto Logging
 
