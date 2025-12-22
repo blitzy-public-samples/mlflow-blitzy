@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## 3.1.3 (Unreleased)
+
+MLflow 3.1.3 includes new features and improvements.
+
+Features:
+
+- [Tracking] Automatic Git metadata tracking: MLflow now automatically captures Git branch name and repository URL as system tags (`mlflow.source.git.branch` and `mlflow.source.git.repoURL`) when starting experiment runs from within Git repositories, without requiring any code changes.
+
 ## 3.1.2 (2025-07-08)
 
 MLflow 3.1.2 is a patch release that includes several bug fixes.

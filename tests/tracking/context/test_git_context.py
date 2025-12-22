@@ -4,10 +4,12 @@ import git
 import pytest
 
 from mlflow.tracking.context.git_context import GitRunContext
-from mlflow.utils.mlflow_tags import MLFLOW_GIT_COMMIT
+from mlflow.utils.mlflow_tags import MLFLOW_GIT_BRANCH, MLFLOW_GIT_COMMIT, MLFLOW_GIT_REPO_URL
 
 MOCK_SCRIPT_NAME = "/path/to/script.py"
 MOCK_COMMIT_HASH = "commit-hash"
+MOCK_BRANCH_NAME = "feature/git-tracking"
+MOCK_REPO_URL = "https://github.com/mlflow/mlflow.git"
 
 
 @pytest.fixture
@@ -22,6 +24,8 @@ def patch_script_name():
 def patch_git_repo():
     mock_repo = mock.Mock()
     mock_repo.head.commit.hexsha = MOCK_COMMIT_HASH
+    mock_repo.active_branch.name = MOCK_BRANCH_NAME
+    mock_repo.remotes = [mock.Mock(url=MOCK_REPO_URL)]
     mock_repo.ignored.return_value = []
     with mock.patch("git.Repo", return_value=mock_repo):
         yield mock_repo
@@ -37,15 +41,78 @@ def test_git_run_context_in_context_false(patch_script_name):
 
 
 def test_git_run_context_tags(patch_script_name, patch_git_repo):
-    assert GitRunContext().tags() == {MLFLOW_GIT_COMMIT: MOCK_COMMIT_HASH}
+    tags = GitRunContext().tags()
+    assert tags[MLFLOW_GIT_COMMIT] == MOCK_COMMIT_HASH
+    assert tags[MLFLOW_GIT_BRANCH] == MOCK_BRANCH_NAME
+    assert tags[MLFLOW_GIT_REPO_URL] == MOCK_REPO_URL
 
 
 def test_git_run_context_caching(patch_script_name):
-    """Check that the git commit hash is only looked up once."""
+    """Check that the git metadata is only looked up once per property.
 
+    With the enhanced GitRunContext, git.Repo is called once for each property
+    (commit, branch, URL) during the first access, but subsequent calls to
+    in_context() and tags() use cached values.
+    """
     with mock.patch("git.Repo") as mock_repo:
         context = GitRunContext()
+        # First call to in_context() triggers lookup for all three properties
         context.in_context()
+        # Call tags() which should use cached values
+        context.tags()
+        # Call in_context() again to verify caching
+        context.in_context()
+        # Call tags() again to verify caching
         context.tags()
 
-    mock_repo.assert_called_once()
+    # git.Repo is called 3 times total (once per git metadata property: commit, branch, URL)
+    # Each subsequent call uses cached values
+    assert mock_repo.call_count == 3
+
+
+def test_git_run_context_detached_head(patch_script_name):
+    """Test handling when active_branch raises TypeError (detached HEAD state)."""
+    mock_repo = mock.Mock()
+    mock_repo.head.commit.hexsha = MOCK_COMMIT_HASH
+    type(mock_repo).active_branch = mock.PropertyMock(side_effect=TypeError("HEAD is detached"))
+    mock_repo.remotes = [mock.Mock(url=MOCK_REPO_URL)]
+    mock_repo.ignored.return_value = []
+    with mock.patch("git.Repo", return_value=mock_repo):
+        context = GitRunContext()
+        assert context.in_context()
+        tags = context.tags()
+        assert tags[MLFLOW_GIT_COMMIT] == MOCK_COMMIT_HASH
+        assert MLFLOW_GIT_BRANCH not in tags
+        assert tags[MLFLOW_GIT_REPO_URL] == MOCK_REPO_URL
+
+
+def test_git_run_context_no_remotes(patch_script_name):
+    """Test handling when remotes list is empty."""
+    mock_repo = mock.Mock()
+    mock_repo.head.commit.hexsha = MOCK_COMMIT_HASH
+    mock_repo.active_branch.name = MOCK_BRANCH_NAME
+    mock_repo.remotes = []
+    mock_repo.ignored.return_value = []
+    with mock.patch("git.Repo", return_value=mock_repo):
+        context = GitRunContext()
+        assert context.in_context()
+        tags = context.tags()
+        assert tags[MLFLOW_GIT_COMMIT] == MOCK_COMMIT_HASH
+        assert tags[MLFLOW_GIT_BRANCH] == MOCK_BRANCH_NAME
+        assert MLFLOW_GIT_REPO_URL not in tags
+
+
+def test_git_run_context_partial_git_info(patch_script_name):
+    """Test when only some Git information is available (e.g., commit but no branch or URL)."""
+    mock_repo = mock.Mock()
+    mock_repo.head.commit.hexsha = MOCK_COMMIT_HASH
+    type(mock_repo).active_branch = mock.PropertyMock(side_effect=TypeError("HEAD is detached"))
+    mock_repo.remotes = []
+    mock_repo.ignored.return_value = []
+    with mock.patch("git.Repo", return_value=mock_repo):
+        context = GitRunContext()
+        assert context.in_context()  # Should be in context because commit is available
+        tags = context.tags()
+        assert tags[MLFLOW_GIT_COMMIT] == MOCK_COMMIT_HASH
+        assert MLFLOW_GIT_BRANCH not in tags
+        assert MLFLOW_GIT_REPO_URL not in tags
