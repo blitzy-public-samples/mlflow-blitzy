@@ -546,16 +546,21 @@ prod_models = mlflow.search_runs(
 
 MLflow automatically sets several system tags to capture execution context:
 
-| Tag                        | Description                              | When Set               |
-| -------------------------- | ---------------------------------------- | ---------------------- |
-| `mlflow.source.name`       | Source file or notebook name             | Always                 |
-| `mlflow.source.type`       | Source type (NOTEBOOK, JOB, LOCAL, etc.) | Always                 |
-| `mlflow.user`              | User who created the run                 | Always                 |
-| `mlflow.source.git.commit` | Git commit hash                          | When run from git repo |
-| `mlflow.source.git.branch` | Git branch name                          | MLflow Projects only   |
-| `mlflow.parentRunId`       | Parent run ID for nested runs            | Child runs only        |
-| `mlflow.docker.image.name` | Docker image used                        | Docker environments    |
-| `mlflow.note.content`      | **User-editable** description            | Manual only            |
+| Tag                         | Description                              | When Set               |
+| --------------------------- | ---------------------------------------- | ---------------------- |
+| `mlflow.source.name`        | Source file or notebook name             | Always                 |
+| `mlflow.source.type`        | Source type (NOTEBOOK, JOB, LOCAL, etc.) | Always                 |
+| `mlflow.user`               | User who created the run                 | Always                 |
+| `mlflow.source.git.commit`  | Git commit hash                          | When run from git repo |
+| `mlflow.source.git.branch`  | Git branch name                          | When run from git repo |
+| `mlflow.source.git.repoURL` | Git repository URL                       | When run from git repo |
+| `mlflow.parentRunId`        | Parent run ID for nested runs            | Child runs only        |
+| `mlflow.docker.image.name`  | Docker image used                        | Docker environments    |
+| `mlflow.note.content`       | **User-editable** description            | Manual only            |
+
+:::info Automatic Git Metadata Tracking
+When you start an MLflow run from within a Git repository, MLflow automatically captures the current Git commit hash, branch name, and repository URL as system tags. This happens transparently without requiring any code changes, making it easy to trace experiment results back to the exact code version that produced them. These tags are set when Git information is available; if any information cannot be detected (e.g., detached HEAD state), that particular tag is simply omitted.
+:::
 
 :::tip pro-tip
 Use `mlflow.note.content` to document experiment insights, hypotheses, or results directly in the MLflow UI. This tag appears in a dedicated Notes section on the run page.
