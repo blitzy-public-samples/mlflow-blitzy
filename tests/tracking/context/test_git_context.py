@@ -48,18 +48,25 @@ def test_git_run_context_tags(patch_script_name, patch_git_repo):
 
 
 def test_git_run_context_caching(patch_script_name):
-    """Check that the git information is looked up once per property (3 times total for commit, branch, URL)."""
+    """Check that the git metadata is only looked up once per property.
 
+    With the enhanced GitRunContext, git.Repo is called once for each property
+    (commit, branch, URL) during the first access, but subsequent calls to
+    in_context() and tags() use cached values.
+    """
     with mock.patch("git.Repo") as mock_repo:
         context = GitRunContext()
-        # Call in_context() and tags() multiple times
+        # First call to in_context() triggers lookup for all three properties
         context.in_context()
-        context.in_context()
+        # Call tags() which should use cached values
         context.tags()
+        # Call in_context() again to verify caching
+        context.in_context()
+        # Call tags() again to verify caching
         context.tags()
 
-    # Each of the 3 Git properties (commit, branch, URL) creates its own Repo instance
-    # but within GitRunContext, caching ensures each is fetched only once
+    # git.Repo is called 3 times total (once per git metadata property: commit, branch, URL)
+    # Each subsequent call uses cached values
     assert mock_repo.call_count == 3
 
 
