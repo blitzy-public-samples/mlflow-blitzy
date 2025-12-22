@@ -17,9 +17,9 @@ from unittest import mock
 import pytest
 
 import mlflow
+import mlflow.tracking.context.registry
 from mlflow import MlflowClient
 from mlflow.tracking.context.git_context import GitRunContext
-from mlflow.tracking.context.registry import _run_context_provider_registry
 from mlflow.utils.mlflow_tags import (
     MLFLOW_GIT_BRANCH,
     MLFLOW_GIT_COMMIT,
@@ -33,26 +33,37 @@ TEST_BRANCH_NAME = "feature/test-git-tracking"
 TEST_REPO_URL = "https://github.com/mlflow/test-repo.git"
 
 
+def _clear_git_context_cache():
+    """
+    Clears the GitRunContext cache.
+    
+    This helper function clears the cache of the registered GitRunContext instance.
+    It must be called INSIDE the mock.patch context to ensure the cache is cleared
+    after sys.argv has been mocked.
+    
+    Note: We access the registry dynamically through the module to handle cases where
+    other tests may have reloaded the registry module, creating a new registry instance.
+    """
+    # Access registry dynamically to get the current instance
+    registry = mlflow.tracking.context.registry._run_context_provider_registry
+    for provider in registry:
+        if isinstance(provider, GitRunContext):
+            provider._cache = {}
+            break
+
+
 @pytest.fixture(autouse=True)
 def clear_git_context_cache():
     """
-    Clears the GitRunContext cache before each test.
+    Clears the GitRunContext cache before and after each test.
     
-    The GitRunContext instance is created once at module import time and reused
-    for all subsequent calls to resolve_tags(). This fixture ensures each test
-    starts with a clean cache so that mocked sys.argv values are properly used.
+    Note: This fixture clears the cache at setup and teardown, but tests should
+    also call _clear_git_context_cache() inside mock.patch contexts to ensure
+    the cache is cleared after sys.argv is mocked.
     """
-    # Find and clear the registered GitRunContext instance's cache
-    for provider in _run_context_provider_registry:
-        if isinstance(provider, GitRunContext):
-            provider._cache = {}
-            break
+    _clear_git_context_cache()
     yield
-    # Also clear after test for good hygiene
-    for provider in _run_context_provider_registry:
-        if isinstance(provider, GitRunContext):
-            provider._cache = {}
-            break
+    _clear_git_context_cache()
 
 
 @pytest.fixture
@@ -151,6 +162,8 @@ class TestStartRunGitMetadata:
         # Patch sys.argv to simulate script execution from Git repo
         # os.path.isfile should return True for the test file so git_utils can find the directory
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as run:
                 run_id = run.info.run_id
         
@@ -173,6 +186,8 @@ class TestStartRunGitMetadata:
         test_file = non_git_directory["test_file"]
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as run:
                 run_id = run.info.run_id
         
@@ -196,6 +211,8 @@ class TestCreateRunGitMetadata:
         
         # Patch sys.argv to simulate script execution from Git repo
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             # start_run uses context resolution which includes GitRunContext
             with mlflow.start_run() as run:
                 run_id = run.info.run_id
@@ -220,6 +237,8 @@ class TestManualTagsPreserved:
         manual_url = "https://github.com/manual/repo.git"
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run(
                 tags={
                     MLFLOW_GIT_BRANCH: manual_branch,
@@ -245,6 +264,8 @@ class TestManualTagsPreserved:
         manual_branch = "set_tag/branch"
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as run:
                 mlflow.set_tag(MLFLOW_GIT_BRANCH, manual_branch)
                 run_id = run.info.run_id
@@ -266,6 +287,8 @@ class TestNestedRunsGitMetadata:
         test_file = git_repo_fixture["test_file"]
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as parent_run:
                 parent_run_id = parent_run.info.run_id
                 
@@ -296,6 +319,8 @@ class TestTagFormatValidation:
         test_file = git_repo_fixture["test_file"]
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as run:
                 run_id = run.info.run_id
         
@@ -328,6 +353,8 @@ class TestConcurrentRunCreation:
         
         def create_run():
             with mock.patch("sys.argv", [test_file]):
+                # Clear cache inside mock context to ensure fresh Git detection
+                _clear_git_context_cache()
                 with mlflow.start_run() as run:
                     return run.info.run_id
         
@@ -367,6 +394,8 @@ class TestEdgeCases:
         )
         
         with mock.patch("sys.argv", [test_file]):
+            # Clear cache inside mock context to ensure fresh Git detection
+            _clear_git_context_cache()
             with mlflow.start_run() as run:
                 run_id = run.info.run_id
         
@@ -423,6 +452,8 @@ class TestEdgeCases:
             commit_hash = result.stdout.strip()
             
             with mock.patch("sys.argv", [test_file]):
+                # Clear cache inside mock context to ensure fresh Git detection
+                _clear_git_context_cache()
                 with mlflow.start_run() as run:
                     run_id = run.info.run_id
             
